@@ -25,6 +25,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.MessageType;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.psi.PsiDocumentManager;
+import com.intellij.psi.PsiFile;
 import com.intellij.remoteServer.util.CloudNotifier;
 import com.intellij.util.PlatformIcons;
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -65,6 +66,7 @@ import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseMessage;
 import org.eclipse.lsp4j.services.LanguageClient;
 import org.eclipse.lsp4j.services.LanguageServer;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.wso2.lsp4intellij.IntellijLanguageClient;
 import org.wso2.lsp4intellij.client.DefaultLanguageClient;
@@ -95,6 +97,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -113,6 +116,7 @@ import static org.wso2.lsp4intellij.requests.Timeouts.INIT;
 import static org.wso2.lsp4intellij.requests.Timeouts.SHUTDOWN;
 import static org.wso2.lsp4intellij.utils.ApplicationUtils.computableReadAction;
 import static org.wso2.lsp4intellij.utils.ApplicationUtils.invokeLater;
+import static org.wso2.lsp4intellij.utils.ApplicationUtils.pool;
 import static org.wso2.lsp4intellij.utils.FileUtils.editorToProjectFolderUri;
 import static org.wso2.lsp4intellij.utils.FileUtils.editorToURIString;
 import static org.wso2.lsp4intellij.utils.FileUtils.reloadEditors;
@@ -123,21 +127,13 @@ import static org.wso2.lsp4intellij.utils.FileUtils.sanitizeURI;
  */
 public class LanguageServerWrapper {
 
-    private Logger LOG = Logger.getInstance(LanguageServerWrapper.class);
-    private static CloudNotifier notifier = new CloudNotifier("Language Server Protocol client");
-
-    private static final Map<Pair<String, String>, LanguageServerWrapper> uriToLanguageServerWrapper = new ConcurrentHashMap<>();
-    private final LSPExtensionManager extManager;
     public LanguageServerDefinition serverDefinition;
-    private Project project;
+    private final LSPExtensionManager extManager;
+    private final Project project;
     private final HashSet<Editor> toConnect = new HashSet<>();
-    private String projectRootPath;
+    private final String projectRootPath;
     private final Map<String, EditorEventManager> connectedEditors = new ConcurrentHashMap<>();
-    private LSPServerStatusWidget statusWidget;
-    private int crashCount = 0;
-    private volatile boolean alreadyShownTimeout = false;
-    private volatile boolean alreadyShownCrash = false;
-    private volatile ServerStatus status = STOPPED;
+    private final LSPServerStatusWidget statusWidget;
     private LanguageServer languageServer;
     private LanguageClient client;
     private RequestManager requestManager;
@@ -145,14 +141,21 @@ public class LanguageServerWrapper {
     private Future<?> launcherFuture;
     private CompletableFuture<InitializeResult> initializeFuture;
     private boolean capabilitiesAlreadyRequested = false;
-    private long initializeStartTime = 0L;
+    private int crashCount = 0;
+    private volatile boolean alreadyShownTimeout = false;
+    private volatile boolean alreadyShownCrash = false;
+    private volatile ServerStatus status = STOPPED;
+    private static final Map<Pair<String, String>, LanguageServerWrapper> uriToLanguageServerWrapper =
+            new ConcurrentHashMap<>();
+    private static final Logger LOG = Logger.getInstance(LanguageServerWrapper.class);
+    private static final CloudNotifier notifier = new CloudNotifier("Language Server Protocol client");
 
-    public LanguageServerWrapper(LanguageServerDefinition serverDefinition, Project project) {
+    public LanguageServerWrapper(@NotNull LanguageServerDefinition serverDefinition, @NotNull Project project) {
         this(serverDefinition, project, null);
     }
 
-    public LanguageServerWrapper(LanguageServerDefinition serverDefinition, Project project,
-                                 LSPExtensionManager extManager) {
+    public LanguageServerWrapper(@NotNull LanguageServerDefinition serverDefinition, @NotNull Project project,
+                                 @Nullable LSPExtensionManager extManager) {
         this.serverDefinition = serverDefinition;
         this.project = project;
         // We need to keep the project rootPath in addition to the project instance, since we cannot get the project
@@ -180,8 +183,7 @@ public class LanguageServerWrapper {
      * @return The wrapper for the given editor, or None
      */
     public static LanguageServerWrapper forEditor(Editor editor) {
-        return uriToLanguageServerWrapper.get(new MutablePair<>(editorToURIString(editor),
-                editorToProjectFolderUri(editor)));
+        return uriToLanguageServerWrapper.get(new MutablePair<>(editorToURIString(editor), editorToProjectFolderUri(editor)));
     }
 
     public LanguageServerDefinition getServerDefinition() {
@@ -196,17 +198,11 @@ public class LanguageServerWrapper {
      * @return if the server supports willSaveWaitUntil
      */
     public boolean isWillSaveWaitUntil() {
-        ServerCapabilities serverCapabilities = getServerCapabilities();
-        Either<TextDocumentSyncKind, TextDocumentSyncOptions> capabilities =
-                serverCapabilities != null ? serverCapabilities.getTextDocumentSync() : null;
-        if (capabilities == null) {
-            return false;
-        }
-        if (capabilities.isLeft()) {
-            return false;
-        } else {
-            return capabilities.getRight().getWillSaveWaitUntil();
-        }
+        return Optional.ofNullable(getServerCapabilities())
+          .map(ServerCapabilities::getTextDocumentSync)
+          .map(Either::getRight)
+          .map(TextDocumentSyncOptions::getWillSaveWaitUntil)
+          .orElse(false);
     }
 
     /**
@@ -356,11 +352,13 @@ public class LanguageServerWrapper {
                         for (Editor ed : toConnect) {
                             connect(ed);
                         }
-                        // trigger annotators since the this is the first editor which starts the LS
-                        // and annotators are executed before LS is boostrap to provide diagnostics
+                        // Triggers annotators since this is the first editor which starts the LS
+                        // and annotators are executed before LS is bootstrap to provide diagnostics.
                         computableReadAction(() -> {
-                            DaemonCodeAnalyzer.getInstance(project).restart(
-                                    PsiDocumentManager.getInstance(project).getPsiFile(editor.getDocument()));
+                            PsiFile psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.getDocument());
+                            if (psiFile != null) {
+                                DaemonCodeAnalyzer.getInstance(project).restart(psiFile);
+                            }
                             return null;
                         });
                     }
@@ -441,7 +439,7 @@ public class LanguageServerWrapper {
     /**
      * Starts the LanguageServer
      */
-    private void start() {
+    public void start() {
         if (status == STOPPED && !alreadyShownCrash && !alreadyShownTimeout) {
             setStatus(STARTING);
             try {
@@ -482,12 +480,11 @@ public class LanguageServerWrapper {
                         requestManager = new DefaultRequestManager(this, languageServer, client, res.getCapabilities());
                     }
                     setStatus(STARTED);
-                    // send the initialized message since some langauge servers depends on this message
+                    // send the initialized message since some language servers depends on this message
                     requestManager.initialized(new InitializedParams());
                     setStatus(INITIALIZED);
                     return res;
                 });
-                initializeStartTime = System.currentTimeMillis();
             } catch (LSPException | IOException e) {
                 LOG.warn(e);
                 invokeLater(() ->
@@ -682,11 +679,15 @@ public class LanguageServerWrapper {
      * Reset language server wrapper state so it can be started again if it was failed earlier.
      */
     public void restart() {
-        if (isRestartable()) {
-            alreadyShownCrash = false;
-            alreadyShownTimeout = false;
+        pool(() -> {
+            if (isRestartable()) {
+                alreadyShownCrash = false;
+                alreadyShownTimeout = false;
+            } else {
+                stop(true);
+            }
             reloadEditors(project);
-        }
+        });
     }
 
     /**

@@ -15,6 +15,7 @@
  */
 package org.wso2.lsp4intellij.contributors.symbol;
 
+import com.intellij.ide.util.gotoByName.ChooseByNamePopup;
 import com.intellij.navigation.ChooseByNameContributorEx;
 import com.intellij.navigation.NavigationItem;
 import com.intellij.openapi.project.Project;
@@ -25,6 +26,8 @@ import com.intellij.util.indexing.IdFilter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Optional;
+
 /**
  * The symbol provider implementation for LSP client.
  *
@@ -32,33 +35,23 @@ import org.jetbrains.annotations.Nullable;
  */
 public class LSPSymbolContributor implements ChooseByNameContributorEx {
 
-    private WorkspaceSymbolProvider workspaceSymbolProvider = new WorkspaceSymbolProvider();
+    private final WorkspaceSymbolProvider workspaceSymbolProvider = new WorkspaceSymbolProvider();
 
     @Override
-    public void processNames(@NotNull Processor<String> processor, @NotNull GlobalSearchScope globalSearchScope, @Nullable IdFilter idFilter) {
-        workspaceSymbolProvider.workspaceSymbols("", globalSearchScope.getProject()).stream()
+    public void processNames(@NotNull Processor<? super String> processor, @NotNull GlobalSearchScope globalSearchScope, @Nullable IdFilter idFilter) {
+        String queryString = Optional.ofNullable(globalSearchScope.getProject())
+            .map(p -> p.getUserData(ChooseByNamePopup.CURRENT_SEARCH_PATTERN)).orElse("");
+
+        workspaceSymbolProvider.workspaceSymbols(queryString, globalSearchScope.getProject()).stream()
             .filter(ni -> globalSearchScope.accept(ni.getFile()))
             .map(NavigationItem::getName)
             .forEach(processor::process);
     }
 
     @Override
-    public void processElementsWithName(@NotNull String s, @NotNull Processor<NavigationItem> processor, @NotNull FindSymbolParameters findSymbolParameters) {
+    public void processElementsWithName(@NotNull String s, @NotNull Processor<? super NavigationItem> processor, @NotNull FindSymbolParameters findSymbolParameters) {
         workspaceSymbolProvider.workspaceSymbols(s, findSymbolParameters.getProject()).stream()
             .filter(ni -> findSymbolParameters.getSearchScope().accept(ni.getFile()))
             .forEach(processor::process);
-    }
-
-    @NotNull
-    @Override
-    public String[] getNames(Project project, boolean includeNonProjectItems) {
-        return null;
-    }
-
-    @NotNull
-    @Override
-    public NavigationItem[] getItemsByName(String name, String pattern, Project project,
-            boolean includeNonProjectItems) {
-        return null;
     }
 }
