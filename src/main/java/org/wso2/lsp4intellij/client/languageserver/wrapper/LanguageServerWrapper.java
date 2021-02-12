@@ -506,7 +506,7 @@ public class LanguageServerWrapper {
         workspaceClientCapabilities.setApplyEdit(true);
         workspaceClientCapabilities.setDidChangeWatchedFiles(new DidChangeWatchedFilesCapabilities());
         workspaceClientCapabilities.setExecuteCommand(new ExecuteCommandCapabilities());
-        workspaceClientCapabilities.setWorkspaceEdit(new WorkspaceEditCapabilities());
+        workspaceClientCapabilities.setWorkspaceEdit(new WorkspaceEditCapabilities(true));
         workspaceClientCapabilities.setSymbol(new SymbolCapabilities());
         workspaceClientCapabilities.setWorkspaceFolders(false);
         workspaceClientCapabilities.setConfiguration(false);
