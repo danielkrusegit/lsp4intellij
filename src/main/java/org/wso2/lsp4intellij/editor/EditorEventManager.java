@@ -21,8 +21,8 @@ import com.intellij.codeInsight.hint.HintManager;
 import com.intellij.codeInsight.lookup.AutoCompletionPolicy;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
+import com.intellij.codeInsight.template.Template;
 import com.intellij.codeInsight.template.TemplateManager;
-import com.intellij.codeInsight.template.impl.TemplateImpl;
 import com.intellij.codeInsight.template.impl.TextExpression;
 import com.intellij.lang.Language;
 import com.intellij.lang.LanguageDocumentation;
@@ -33,7 +33,6 @@ import com.intellij.openapi.command.CommandProcessor;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.editor.EditorModificationUtil;
 import com.intellij.openapi.editor.LogicalPosition;
 import com.intellij.openapi.editor.ScrollType;
 import com.intellij.openapi.editor.SelectionModel;
@@ -55,11 +54,11 @@ import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VfsUtil;
-import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.refactoring.rename.inplace.MyLookupExpression;
 import com.intellij.ui.Hint;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lsp4j.CodeAction;
@@ -104,7 +103,6 @@ import org.eclipse.lsp4j.WorkspaceEdit;
 import org.eclipse.lsp4j.jsonrpc.JsonRpcException;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.eclipse.lsp4j.jsonrpc.messages.Tuple;
-import org.jetbrains.annotations.NotNull;
 import org.wso2.lsp4intellij.actions.LSPReferencesAction;
 import org.wso2.lsp4intellij.client.languageserver.ServerOptions;
 import org.wso2.lsp4intellij.client.languageserver.requestmanager.RequestManager;
@@ -126,11 +124,7 @@ import java.awt.Cursor;
 import java.awt.Point;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -205,7 +199,7 @@ public class EditorEventManager {
     private volatile boolean diagnosticSyncRequired = true;
     private volatile boolean codeActionSyncRequired = false;
 
-    public static final String SNIPPET_PLACEHOLDER_REGEX = "\\$\\{\\d+:?([^{^}]*)}";
+    public static final String SNIPPET_PLACEHOLDER_REGEX = "\\$(\\d|\\{\\d+:?([^{^}]*)})";
 
     //Todo - Revisit arguments order and add remaining listeners
     public EditorEventManager(Editor editor, DocumentListener documentListener, EditorMouseListener mouseListener,
@@ -918,7 +912,7 @@ public class EditorEventManager {
         // Fixes IDEA internal assertion failure in windows.
         lookupString = lookupString.replace(DocumentUtils.WIN_SEPARATOR, DocumentUtils.LINUX_SEPARATOR);
         if (item.getInsertTextFormat() == InsertTextFormat.Snippet) {
-            lookupElementBuilder = LookupElementBuilder.create(convertPlaceHolders(lookupString));
+            lookupElementBuilder = LookupElementBuilder.create(lookupString);
         } else {
             lookupElementBuilder = LookupElementBuilder.create(lookupString);
         }
@@ -966,6 +960,9 @@ public class EditorEventManager {
         } else {
             builder = builder.withInsertHandler((InsertionContext context, LookupElement lookupElement) -> {
                 if (format == InsertTextFormat.Snippet) {
+                    // Delete completion of Intellij
+                    context.getDocument().deleteString(context.getStartOffset(), context.getTailOffset());
+
                     context.commitDocument();
                     prepareAndRunSnippet(lookupString);
                 }
@@ -975,46 +972,38 @@ public class EditorEventManager {
         return builder;
     }
 
-    @SuppressWarnings("WeakerAccess")
     public void prepareAndRunSnippet(String insertText) {
+        List<SnippetElement> elements = new ArrayList<>();
+        Matcher matcher = Pattern.compile(SNIPPET_PLACEHOLDER_REGEX).matcher(insertText);
 
-        List<SnippetVariable> variables = new ArrayList<>();
-        // Extracts variables using placeholder REGEX pattern.
-        Matcher varMatcher = Pattern.compile(SNIPPET_PLACEHOLDER_REGEX).matcher(insertText);
-        while (varMatcher.find()) {
-            variables.add(new SnippetVariable(varMatcher.group(), varMatcher.start(), varMatcher.end()));
+        int lastStartIndex = 0;
+        while (matcher.find()) {
+            // Add previous text
+            String previousText = insertText.substring(lastStartIndex, matcher.start());
+            if (!previousText.isEmpty()) {
+                elements.add(new SnippetText(previousText));
+            }
+
+            // Add variable
+            String targetVariableRawText = insertText.substring(matcher.start(), matcher.end());
+            elements.add(new SnippetVariable(targetVariableRawText));
+
+            lastStartIndex = matcher.end();
         }
 
-        variables.sort(Comparator.comparingInt(o -> o.startIndex));
-        final String[] finalInsertText = {insertText};
-        variables.forEach(var -> finalInsertText[0] = finalInsertText[0].replace(var.lspSnippetText, "$"));
-
-        String[] splitInsertText = finalInsertText[0].split("\\$");
-        finalInsertText[0] = String.join("", splitInsertText);
-
-        TemplateImpl template = (TemplateImpl) TemplateManager.getInstance(getProject()).createTemplate(finalInsertText[0],
-                "lsp4intellij");
-        template.parseSegments();
-
-        final int[] varIndex = {0};
-        variables.forEach(var -> {
-            template.addTextSegment(splitInsertText[varIndex[0]]);
-            template.addVariable(varIndex[0] + "_" + var.variableValue, new TextExpression(var.variableValue),
-                    new TextExpression(var.variableValue), true, false);
-            varIndex[0]++;
-        });
-        // If the snippet text ends with a placeholder, there will be no string segment left to append after the last
-        // variable.
-        if (splitInsertText.length != variables.size()) {
-            template.addTextSegment(splitInsertText[splitInsertText.length - 1]);
+        // Add last text
+        String lastText = insertText.substring(lastStartIndex);
+        if (!lastText.isEmpty()) {
+            elements.add(new SnippetText(lastText));
         }
-        template.setInline(true);
-        EditorModificationUtil.moveCaretRelatively(editor, -template.getTemplateText().length());
+
+        // Create template
+        Template template = TemplateManager.getInstance(getProject()).createTemplate(String.valueOf(insertText.hashCode()), "lsp4intellij");
+        for (SnippetElement snippetElement : elements) {
+            snippetElement.addToTemplate(template);
+        }
         TemplateManager.getInstance(getProject()).startTemplate(editor, template);
-    }
 
-    private String convertPlaceHolders(String insertText) {
-        return insertText.replaceAll(SNIPPET_PLACEHOLDER_REGEX, "");
     }
 
     /**
@@ -1525,30 +1514,82 @@ public class EditorEventManager {
         }
 
         @Override
-        public int compareTo(@NotNull LSPTextEdit te) {
+        public int compareTo(LSPTextEdit te) {
             return te.getStartOffset() - getStartOffset();
         }
     }
 
-    static class SnippetVariable {
-        String lspSnippetText;
-        int startIndex;
-        int endIndex;
-        String variableValue;
-        String intellijSnippetText;
+    private static abstract class SnippetElement {
+        protected final String rawText;
 
-        SnippetVariable(String text, int start, int end) {
-            this.lspSnippetText = text;
-            this.startIndex = start;
-            this.endIndex = end;
-            this.variableValue = getVariableValue(text);
+        public SnippetElement(String rawText) {
+            this.rawText = rawText;
         }
 
-        private String getVariableValue(String lspVarSnippet) {
-            if (lspVarSnippet.contains(":")) {
-                return lspVarSnippet.substring(lspVarSnippet.indexOf(':') + 1, lspVarSnippet.lastIndexOf('}'));
+        public abstract void addToTemplate(Template template);
+    }
+
+    private static class SnippetText extends SnippetElement {
+        public SnippetText(String text) {
+            super(text);
+        }
+
+        @Override
+        public void addToTemplate(Template template) {
+            template.addTextSegment(this.rawText);
+        }
+    }
+
+    private static class SnippetVariable extends SnippetElement {
+
+        protected final int index;
+        protected String placeHolder = "";
+
+        protected List<String> suggestions = new ArrayList<>();
+
+        public SnippetVariable(String rawText) {
+            super(rawText);
+
+            if (rawText.contains("|")) {
+                String[] parts = rawText.split("\\|");
+
+                // Split up ${1|SUGGESTIONS|}
+                this.index = Integer.parseInt(parts[0].substring(2));
+
+                // Split up PLACEHOLDER,PLACEHOLDER
+                String[] suggestions = parts[1].split(",");
+                this.suggestions.addAll(Arrays.asList(suggestions));
+            } else {
+                if (rawText.contains(":")) {
+                    String[] parts = rawText.split(":");
+
+                    // Split up ${INDEX:PLACEHOLDER}
+                    this.index = Integer.parseInt(parts[0].substring(2));
+                    this.placeHolder = parts[1].substring(0, parts[1].length() - 1);
+                } else {
+
+                    // Get index of $INDEX
+                    this.index = Integer.parseInt(rawText.substring(1));
+                }
             }
-            return " ";
+        }
+
+        @Override
+        public void addToTemplate(Template template) {
+            if (this.index == 0 && this.placeHolder.isEmpty()) {
+                // Add text
+                template.addEndVariable();
+            } else {
+                if(this.suggestions.isEmpty()) {
+                    // Add placeholder
+                    template.addVariable(this.rawText, new TextExpression(this.placeHolder), new TextExpression(this.placeHolder), true, false);
+                } else {
+                    // Add dropdown
+                    MyLookupExpression expression = new MyLookupExpression(this.placeHolder,
+                            new LinkedHashSet<>(this.suggestions), null, null, true, null);
+                    template.addVariable(this.rawText, expression, expression, true, false);
+                }
+            }
         }
     }
 }

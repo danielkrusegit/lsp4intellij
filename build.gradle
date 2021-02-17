@@ -1,5 +1,5 @@
 plugins {
-    id "org.jetbrains.intellij" version "0.4.9"
+    id "org.jetbrains.intellij" //version "0.4.9"
     id "com.github.hierynomus.license" version "0.15.0"
     id "com.github.gradle-git-version-calculator" version "1.1.0"
     id 'net.researchgate.release' version '2.6.0'
@@ -15,8 +15,7 @@ group = "org.wso2.lsp4intellij"
 version = gitVersionCalculator.calculateVersion("v")
 
 intellij {
-    version '2017.3'
-    type 'IC'
+    version 'IC-2020.3.2'
     updateSinceUntilBuild false
 }
 

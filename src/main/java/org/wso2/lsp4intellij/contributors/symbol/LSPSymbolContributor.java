@@ -35,18 +35,18 @@ public class LSPSymbolContributor implements ChooseByNameContributorEx {
     private WorkspaceSymbolProvider workspaceSymbolProvider = new WorkspaceSymbolProvider();
 
     @Override
-    public void processNames(@NotNull Processor<String> processor, @NotNull GlobalSearchScope globalSearchScope, @Nullable IdFilter idFilter) {
-        workspaceSymbolProvider.workspaceSymbols("", globalSearchScope.getProject()).stream()
-            .filter(ni -> globalSearchScope.accept(ni.getFile()))
-            .map(NavigationItem::getName)
-            .forEach(processor::process);
+    public void processNames(@NotNull Processor<? super String> processor, @NotNull GlobalSearchScope scope, @Nullable IdFilter filter) {
+        workspaceSymbolProvider.workspaceSymbols("", scope.getProject()).stream()
+                .filter(ni -> scope.accept(ni.getFile()))
+                .map(NavigationItem::getName)
+                .forEach(processor::process);
     }
 
     @Override
-    public void processElementsWithName(@NotNull String s, @NotNull Processor<NavigationItem> processor, @NotNull FindSymbolParameters findSymbolParameters) {
-        workspaceSymbolProvider.workspaceSymbols(s, findSymbolParameters.getProject()).stream()
-            .filter(ni -> findSymbolParameters.getSearchScope().accept(ni.getFile()))
-            .forEach(processor::process);
+    public void processElementsWithName(@NotNull String name, @NotNull Processor<? super NavigationItem> processor, @NotNull FindSymbolParameters parameters) {
+        workspaceSymbolProvider.workspaceSymbols(name, parameters.getProject()).stream()
+                .filter(ni -> parameters.getSearchScope().accept(ni.getFile()))
+                .forEach(processor::process);
     }
 
     @NotNull

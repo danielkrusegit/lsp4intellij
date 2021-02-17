@@ -74,7 +74,7 @@ public class LSPDefaultIconProvider extends LSPIconProvider {
             case Unit:
                 return Nodes.Artifact;
             case Value:
-                return Nodes.DataSource;
+                return null;
             case Variable:
                 return Nodes.Variable;
             default:
