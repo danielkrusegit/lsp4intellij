@@ -199,7 +199,7 @@ public class EditorEventManager {
     private volatile boolean diagnosticSyncRequired = true;
     private volatile boolean codeActionSyncRequired = false;
 
-    public static final String SNIPPET_PLACEHOLDER_REGEX = "\\$(\\d|\\{\\d+:?([^{^}]*)})";
+    public static final String SNIPPET_PLACEHOLDER_REGEX = "\\$(\\d|\\{\\d+:?([^}{]|(\\$\\d|\\{\\d+:?([^}])*}))*})";
 
     //Todo - Revisit arguments order and add remaining listeners
     public EditorEventManager(Editor editor, DocumentListener documentListener, EditorMouseListener mouseListener,
@@ -1549,6 +1549,11 @@ public class EditorEventManager {
 
         public SnippetVariable(String rawText) {
             super(rawText);
+
+            // Extract inner format from nested format because IntelliJ doesn't support nested expressions as far as I know..
+            if(StringUtils.countMatches(rawText, "$") > 1) {
+                rawText = rawText.split("\\$(\\d|\\{\\d+:?([^{}])*})")[0];
+            }
 
             if (rawText.contains("|")) {
                 String[] parts = rawText.split("\\|");
