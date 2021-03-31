@@ -1490,26 +1490,26 @@ public class EditorEventManager {
         });
     }
 
-    private static class LSPTextEdit implements Comparable<LSPTextEdit> {
+    public static class LSPTextEdit implements Comparable<LSPTextEdit> {
         private String text;
         private int startOffset;
         private int endOffset;
 
-        LSPTextEdit(String text, int start, int end) {
+        public LSPTextEdit(String text, int start, int end) {
             this.text = text;
             this.startOffset = start;
             this.endOffset = end;
         }
 
-        String getText() {
+        public String getText() {
             return text;
         }
 
-        int getStartOffset() {
+        public int getStartOffset() {
             return startOffset;
         }
 
-        int getEndOffset() {
+        public int getEndOffset() {
             return endOffset;
         }
 

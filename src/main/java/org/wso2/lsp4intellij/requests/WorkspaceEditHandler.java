@@ -15,9 +15,12 @@
  */
 package org.wso2.lsp4intellij.requests;
 
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.command.CommandProcessor;
 import com.intellij.openapi.command.UndoConfirmationPolicy;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
@@ -30,6 +33,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
 import com.intellij.refactoring.listeners.RefactoringElementListener;
 import com.intellij.usageView.UsageInfo;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.eclipse.lsp4j.Range;
 import org.eclipse.lsp4j.ResourceOperation;
@@ -41,7 +45,6 @@ import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.wso2.lsp4intellij.contributors.psi.LSPPsiElement;
 import org.wso2.lsp4intellij.editor.EditorEventManager;
 import org.wso2.lsp4intellij.editor.EditorEventManagerBase;
-import org.wso2.lsp4intellij.utils.ApplicationUtils;
 import org.wso2.lsp4intellij.utils.DocumentUtils;
 import org.wso2.lsp4intellij.utils.FileUtils;
 
@@ -55,6 +58,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.RunnableFuture;
 import java.util.stream.Stream;
 
 import static org.wso2.lsp4intellij.utils.ApplicationUtils.invokeLater;
@@ -171,8 +176,8 @@ public class WorkspaceEditHandler {
                     CommandProcessor.getInstance()
                             .executeCommand(curProject[0], runnable, name, "LSPPlugin", UndoConfirmationPolicy.DEFAULT,
                                     false);
-                    openedEditors.forEach(f -> FileEditorManager.getInstance(curProject[0]).closeFile(f));
-                    toClose.forEach(f -> FileEditorManager.getInstance(curProject[0]).closeFile(f));
+                    //openedEditors.forEach(f -> FileEditorManager.getInstance(curProject[0]).closeFile(f));
+                    //toClose.forEach(f -> FileEditorManager.getInstance(curProject[0]).closeFile(f));
                 }));
             }
             return didApply[0];
@@ -208,15 +213,88 @@ public class WorkspaceEditHandler {
         }
         FileEditorManager fileEditorManager = FileEditorManager.getInstance(project);
         OpenFileDescriptor descriptor = new OpenFileDescriptor(project, file);
-        Editor editor = ApplicationUtils
-                .computableWriteAction(() -> fileEditorManager.openTextEditor(descriptor, false));
+
+        // We have to run openTextEditor using invokeLater
+        Editor editor = null;
+        try {
+            RunnableFuture<Editor> rf = new FutureTask<>(() -> fileEditorManager.openTextEditor(descriptor, false));
+            ApplicationManager.getApplication().invokeLater(rf, ModalityState.NON_MODAL);
+            editor = rf.get();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         openedEditors.add(file);
         curProject[0] = editor.getProject();
         Runnable runnable = null;
         EditorEventManager manager = EditorEventManagerBase.forEditor(editor);
         if (manager != null) {
             runnable = manager.getEditsRunnable(version, edits, name, true);
+        } else {
+            // Support other files than from the supported language
+            runnable = getEditsRunnable(editor, edits, true);
         }
         return runnable;
+    }
+
+    public static Runnable getEditsRunnable(Editor editor, List<TextEdit> edits, boolean setCaret) {
+        if (edits == null) {
+            LOG.warn("Received edits list is null.");
+            return null;
+        }
+        Document document = editor.getDocument();
+        if (!document.isWritable()) {
+            LOG.warn("Document is not writable");
+            return null;
+        }
+
+        return () -> {
+            // Creates a sorted edit list based on the insertion position and the edits will be applied from the bottom
+            // to the top of the document. Otherwise all the other edit ranges will be invalid after the very first edit,
+            // since the document is changed.
+            List<EditorEventManager.LSPTextEdit> lspEdits = new ArrayList<>();
+            edits.forEach(edit -> {
+                String text = edit.getNewText();
+                Range range = edit.getRange();
+
+                if (range != null && StringUtils.isNotEmpty(text)) {
+                    boolean addToEnd = range.getStart().getLine() == 999999 && range.getEnd().getLine() == 999999;
+                    int documentEnd = editor.getDocument().getTextLength();
+
+                    int start = addToEnd ? documentEnd : DocumentUtils.LSPPosToOffset(editor, range.getStart());
+                    int end = addToEnd ? documentEnd : DocumentUtils.LSPPosToOffset(editor, range.getEnd());
+
+                    lspEdits.add(new EditorEventManager.LSPTextEdit(text, start, end));
+                }
+            });
+
+            // Sort according to the start offset, in descending order.
+            Collections.sort(lspEdits);
+
+            lspEdits.forEach(edit -> {
+                String text = edit.getText();
+                int start = edit.getStartOffset();
+                int end = edit.getEndOffset();
+                if (StringUtils.isEmpty(text)) {
+                    document.deleteString(start, end);
+                } else {
+                    text = text.replace(DocumentUtils.WIN_SEPARATOR, DocumentUtils.LINUX_SEPARATOR);
+                    if (end >= 0) {
+                        if (end - start <= 0) {
+                            document.insertString(start, text);
+                        } else {
+                            document.replaceString(start, end, text);
+                        }
+                    } else if (start == 0) {
+                        document.setText(text);
+                    } else if (start > 0) {
+                        document.insertString(start, text);
+                    }
+                    if (setCaret) {
+                        editor.getCaretModel().moveToOffset(start + text.length());
+                    }
+                }
+            });
+        };
     }
 }
