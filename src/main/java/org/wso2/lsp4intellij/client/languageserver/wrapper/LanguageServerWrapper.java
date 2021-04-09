@@ -27,6 +27,7 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.remoteServer.util.CloudNotifier;
 import com.intellij.util.PlatformIcons;
+import org.apache.commons.codec.language.bm.Languages;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -103,6 +104,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 import static org.wso2.lsp4intellij.client.languageserver.ServerStatus.INITIALIZED;
 import static org.wso2.lsp4intellij.client.languageserver.ServerStatus.STARTED;
@@ -356,6 +358,12 @@ public class LanguageServerWrapper {
                         for (Editor ed : toConnect) {
                             connect(ed);
                         }
+
+                        // Call listeners
+                        for (Consumer<LanguageServerWrapper> callback : IntellijLanguageClient.connectListeners) {
+                            callback.accept(this);
+                        }
+
                         // trigger annotators since the this is the first editor which starts the LS
                         // and annotators are executed before LS is boostrap to provide diagnostics
                         computableReadAction(() -> {

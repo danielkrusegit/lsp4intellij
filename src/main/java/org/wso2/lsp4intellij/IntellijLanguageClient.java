@@ -49,6 +49,7 @@ import org.wso2.lsp4intellij.utils.FileUtils;
 import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import static org.wso2.lsp4intellij.utils.ApplicationUtils.pool;
@@ -63,6 +64,8 @@ public class IntellijLanguageClient implements ApplicationComponent, Disposable 
     private static Map<Pair<String, String>, LanguageServerDefinition> extToServerDefinition = new ConcurrentHashMap<>();
     private static Map<String, LSPExtensionManager> extToExtManager = new ConcurrentHashMap<>();
     private static final Predicate<LanguageServerWrapper> RUNNING = (s) -> s.getStatus() != ServerStatus.STOPPED;
+
+    public static List<Consumer<LanguageServerWrapper>> connectListeners = new ArrayList<>();
 
     @Override
     public void initComponent() {

@@ -85,7 +85,7 @@ public class LSPServerStatusWidget implements StatusBarWidget {
             widgetIDs.put(project, list);
         }
 
-        statusBar.addWidget(widget, "before " + widgetIDs.get(project).get(0));
+        //statusBar.addWidget(widget, "before " + widgetIDs.get(project).get(0));
         widgetIDs.get(project).add(0, widget.ID());
         return widget;
     }
