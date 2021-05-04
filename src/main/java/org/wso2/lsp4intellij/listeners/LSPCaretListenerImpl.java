@@ -19,10 +19,13 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.event.CaretEvent;
 import com.intellij.openapi.editor.event.CaretListener;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+
+import static org.wso2.lsp4intellij.utils.ApplicationUtils.invokeLater;
 
 public class LSPCaretListenerImpl extends LSPListener implements CaretListener {
 
@@ -30,6 +33,8 @@ public class LSPCaretListenerImpl extends LSPListener implements CaretListener {
     private ScheduledExecutorService scheduler;
     private ScheduledFuture<?> scheduledFuture;
     private static final long DEBOUNCE_INTERVAL_MS = 500;
+
+    private final Executor executor = Executors.newSingleThreadExecutor();
 
     public LSPCaretListenerImpl() {
         scheduler = Executors.newScheduledThreadPool(1);
@@ -49,8 +54,11 @@ public class LSPCaretListenerImpl extends LSPListener implements CaretListener {
     }
 
     private void debouncedCaretPositionChanged() {
-        if (checkEnabled()) {
-            manager.requestAndShowCodeActions();
-        }
+        invokeLater(() -> {
+            int caretPos = this.manager.getEditor().getCaretModel().getCurrentCaret().getOffset();
+            this.executor.execute(() -> {
+                manager.requestAndShowCodeActions(caretPos);
+            });
+        });
     }
 }

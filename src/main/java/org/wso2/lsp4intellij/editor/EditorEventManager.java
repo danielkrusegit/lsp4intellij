@@ -1395,72 +1395,73 @@ public class EditorEventManager {
         }
     }
 
-    public void requestAndShowCodeActions() {
-        invokeLater(() -> {
-            if (editor.isDisposed()) {
+    public Editor getEditor() {
+        return editor;
+    }
+
+    public void requestAndShowCodeActions(int caretPos) {
+        if (editor.isDisposed()) {
+            return;
+        }
+        if (annotations == null) {
+            annotations = new ArrayList<>();
+        }
+
+        // sends code action request.
+        List<Either<Command, CodeAction>> codeActionResp = codeAction(caretPos);
+        if (codeActionResp == null || codeActionResp.isEmpty()) {
+            return;
+        }
+
+        codeActionResp.forEach(element -> {
+            if (element == null) {
                 return;
             }
-            if (annotations == null) {
-                annotations = new ArrayList<>();
-            }
-
-            // sends code action request.
-            int caretPos = editor.getCaretModel().getCurrentCaret().getOffset();
-            List<Either<Command, CodeAction>> codeActionResp = codeAction(caretPos);
-            if (codeActionResp == null || codeActionResp.isEmpty()) {
-                return;
-            }
-
-            codeActionResp.forEach(element -> {
-                if (element == null) {
-                    return;
-                }
-                if (element.isLeft()) {
-                    Command command = element.getLeft();
-                    annotations.forEach(annotation -> {
-                        int start = annotation.getStartOffset();
-                        int end = annotation.getEndOffset();
-                        if (start <= caretPos && end >= caretPos) {
-                            annotation.registerFix(new LSPCommandFix(FileUtils.editorToURIString(editor), command),
-                                    new TextRange(start, end));
-                            codeActionSyncRequired = true;
-                        }
-                    });
-                } else if (element.isRight()) {
-                    CodeAction codeAction = element.getRight();
-                    List<Diagnostic> diagnosticContext = codeAction.getDiagnostics();
-                    annotations.forEach(annotation -> {
-                        int start = annotation.getStartOffset();
-                        int end = annotation.getEndOffset();
-                        if (start <= caretPos && end >= caretPos) {
-                            annotation.registerFix(new LSPCodeActionFix(FileUtils.editorToURIString(editor),
-                                    codeAction), new TextRange(start, end));
-                            codeActionSyncRequired = true;
-                        }
-                    });
-
-                    // If the code actions does not have a diagnostics context, creates an intention action for
-                    // the current line.
-                    if ((diagnosticContext == null || diagnosticContext.isEmpty()) && !codeActionSyncRequired) {
-                        // Calculates text range of the current line.
-                        int line = editor.getCaretModel().getCurrentCaret().getLogicalPosition().line;
-                        int startOffset = editor.getDocument().getLineStartOffset(line);
-                        int endOffset = editor.getDocument().getLineEndOffset(line);
-                        TextRange range = new TextRange(startOffset, endOffset);
-
-                        Annotation annotation = this.anonHolder.createInfoAnnotation(range, codeAction.getTitle());
-                        annotation.registerFix(new LSPCodeActionFix(FileUtils.editorToURIString(editor), codeAction), range);
-
-                        this.annotations.add(annotation);
-                        diagnosticSyncRequired = true;
+            if (element.isLeft()) {
+                Command command = element.getLeft();
+                annotations.forEach(annotation -> {
+                    int start = annotation.getStartOffset();
+                    int end = annotation.getEndOffset();
+                    if (start <= caretPos && end >= caretPos) {
+                        annotation.registerFix(new LSPCommandFix(FileUtils.editorToURIString(editor), command),
+                                new TextRange(start, end));
+                        codeActionSyncRequired = true;
                     }
+                });
+            } else if (element.isRight()) {
+                CodeAction codeAction = element.getRight();
+                List<Diagnostic> diagnosticContext = codeAction.getDiagnostics();
+                annotations.forEach(annotation -> {
+                    int start = annotation.getStartOffset();
+                    int end = annotation.getEndOffset();
+                    if (start <= caretPos && end >= caretPos) {
+                        annotation.registerFix(new LSPCodeActionFix(FileUtils.editorToURIString(editor),
+                                codeAction), new TextRange(start, end));
+                        codeActionSyncRequired = true;
+                    }
+                });
+
+                // If the code actions does not have a diagnostics context, creates an intention action for
+                // the current line.
+                if ((diagnosticContext == null || diagnosticContext.isEmpty()) && !codeActionSyncRequired) {
+                    // Calculates text range of the current line.
+                    int line = editor.getCaretModel().getCurrentCaret().getLogicalPosition().line;
+                    int startOffset = editor.getDocument().getLineStartOffset(line);
+                    int endOffset = editor.getDocument().getLineEndOffset(line);
+                    TextRange range = new TextRange(startOffset, endOffset);
+
+                    Annotation annotation = this.anonHolder.createInfoAnnotation(range, codeAction.getTitle());
+                    annotation.registerFix(new LSPCodeActionFix(FileUtils.editorToURIString(editor), codeAction), range);
+
+                    this.annotations.add(annotation);
+                    diagnosticSyncRequired = true;
                 }
-            });
-            // If code actions are updated, forcefully triggers the inspection tool.
-            if (codeActionSyncRequired) {
-                updateErrorAnnotations();
             }
         });
+        // If code actions are updated, forcefully triggers the inspection tool.
+        if (codeActionSyncRequired) {
+            updateErrorAnnotations();
+        }
     }
 
     /**
@@ -1540,7 +1541,7 @@ public class EditorEventManager {
             super(rawText);
 
             // Extract inner format from nested format because IntelliJ doesn't support nested expressions as far as I know..
-            if(StringUtils.countMatches(rawText, "$") > 1) {
+            if (StringUtils.countMatches(rawText, "$") > 1) {
                 rawText = rawText.split("\\$(\\d|\\{\\d+:?([^{}])*})")[0];
             }
 
@@ -1574,7 +1575,7 @@ public class EditorEventManager {
                 // Add text
                 template.addEndVariable();
             } else {
-                if(this.suggestions.isEmpty()) {
+                if (this.suggestions.isEmpty()) {
                     // Add placeholder
                     template.addVariable(this.rawText, new TextExpression(this.placeHolder), new TextExpression(this.placeHolder), true, false);
                 } else {

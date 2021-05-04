@@ -18,7 +18,12 @@ package org.wso2.lsp4intellij.listeners;
 import com.intellij.openapi.editor.event.DocumentEvent;
 import com.intellij.openapi.editor.event.DocumentListener;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+
 public class DocumentListenerImpl extends LSPListener implements DocumentListener {
+
+    private final Executor executor = Executors.newSingleThreadExecutor();
 
     /**
      * Called before the text of the document is changed.
@@ -37,7 +42,9 @@ public class DocumentListenerImpl extends LSPListener implements DocumentListene
     @Override
     public void documentChanged(DocumentEvent event) {
         if (checkEnabled()) {
-            manager.documentChanged(event);
+            this.executor.execute(() -> {
+                manager.documentChanged(event);
+            });
         }
     }
 }
