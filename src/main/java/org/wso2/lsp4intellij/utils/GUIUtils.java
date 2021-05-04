@@ -42,6 +42,7 @@ import org.wso2.lsp4intellij.contributors.label.LSPLabelProvider;
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.StyleSheet;
 import java.awt.*;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
@@ -82,7 +83,13 @@ public final class GUIUtils {
      */
     public static Hint createAndShowEditorHint(Editor editor, String string, Point point, short constraint, int flags) {
         JTextPane textPane = new JTextPane();
-        textPane.setEditorKit(new HTMLEditorKit());
+
+        HTMLEditorKit kit = new HTMLEditorKit();
+        StyleSheet style = new StyleSheet();
+        style.addRule("p{color:white;}"); // Change color to white
+        kit.setStyleSheet(style);
+        textPane.setEditorKit(kit);
+
         textPane.setText(string);
         textPane.setEditable(false);
         textPane.addHyperlinkListener(e -> {

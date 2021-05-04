@@ -120,11 +120,16 @@ import org.wso2.lsp4intellij.utils.DocumentUtils;
 import org.wso2.lsp4intellij.utils.FileUtils;
 import org.wso2.lsp4intellij.utils.GUIUtils;
 
-import java.awt.Cursor;
-import java.awt.Point;
+import javax.swing.*;
+import java.awt.*;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -132,26 +137,10 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.swing.Icon;
-
-import static org.wso2.lsp4intellij.editor.EditorEventManagerBase.getCtrlRange;
-import static org.wso2.lsp4intellij.editor.EditorEventManagerBase.getIsCtrlDown;
-import static org.wso2.lsp4intellij.editor.EditorEventManagerBase.getIsKeyPressed;
-import static org.wso2.lsp4intellij.editor.EditorEventManagerBase.setCtrlRange;
+import static org.wso2.lsp4intellij.editor.EditorEventManagerBase.*;
 import static org.wso2.lsp4intellij.requests.Timeout.getTimeout;
-import static org.wso2.lsp4intellij.requests.Timeouts.CODEACTION;
-import static org.wso2.lsp4intellij.requests.Timeouts.COMPLETION;
-import static org.wso2.lsp4intellij.requests.Timeouts.DEFINITION;
-import static org.wso2.lsp4intellij.requests.Timeouts.EXECUTE_COMMAND;
-import static org.wso2.lsp4intellij.requests.Timeouts.HOVER;
-import static org.wso2.lsp4intellij.requests.Timeouts.REFERENCES;
-import static org.wso2.lsp4intellij.requests.Timeouts.SIGNATURE;
-import static org.wso2.lsp4intellij.requests.Timeouts.WILLSAVE;
-import static org.wso2.lsp4intellij.utils.ApplicationUtils.computableReadAction;
-import static org.wso2.lsp4intellij.utils.ApplicationUtils.computableWriteAction;
-import static org.wso2.lsp4intellij.utils.ApplicationUtils.invokeLater;
-import static org.wso2.lsp4intellij.utils.ApplicationUtils.pool;
-import static org.wso2.lsp4intellij.utils.ApplicationUtils.writeAction;
+import static org.wso2.lsp4intellij.requests.Timeouts.*;
+import static org.wso2.lsp4intellij.utils.ApplicationUtils.*;
 import static org.wso2.lsp4intellij.utils.GUIUtils.createAndShowEditorHint;
 
 /**
@@ -796,15 +785,15 @@ public class EditorEventManager {
             wrapper.notifySuccess(Timeouts.HOVER);
 
             if (hover == null) {
-                LOG.warn(String.format("Hover is null for file %s and pos (%d;%d)", identifier.getUri(),
-                        serverPos.getLine(), serverPos.getCharacter()));
+                //LOG.warn(String.format("Hover is null for file %s and pos (%d;%d)", identifier.getUri(),
+                //        serverPos.getLine(), serverPos.getCharacter()));
                 return;
             }
 
             String string = HoverHandler.getHoverString(hover);
             if (StringUtils.isEmpty(string)) {
-                LOG.warn(String.format("Hover string returned is null for file %s and pos (%d;%d)",
-                        identifier.getUri(), serverPos.getLine(), serverPos.getCharacter()));
+                //LOG.warn(String.format("Hover string returned is null for file %s and pos (%d;%d)",
+                //        identifier.getUri(), serverPos.getLine(), serverPos.getCharacter()));
                 return;
             }
 
