@@ -36,13 +36,12 @@ import org.wso2.lsp4intellij.client.languageserver.serverdefinition.LanguageServ
 import org.wso2.lsp4intellij.contributors.icon.LSPDefaultIconProvider;
 import org.wso2.lsp4intellij.contributors.icon.LSPIconProvider;
 import org.wso2.lsp4intellij.contributors.label.LSPDefaultLabelProvider;
-import org.wso2.lsp4intellij.extensions.LSPExtensionManager;
 import org.wso2.lsp4intellij.contributors.label.LSPLabelProvider;
+import org.wso2.lsp4intellij.extensions.LSPExtensionManager;
 
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.html.HTMLEditorKit;
-import javax.swing.text.html.StyleSheet;
 import java.awt.*;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
@@ -83,13 +82,7 @@ public final class GUIUtils {
      */
     public static Hint createAndShowEditorHint(Editor editor, String string, Point point, short constraint, int flags) {
         JTextPane textPane = new JTextPane();
-
-        HTMLEditorKit kit = new HTMLEditorKit();
-        StyleSheet style = new StyleSheet();
-        style.addRule("p{color:white;}"); // Change color to white
-        kit.setStyleSheet(style);
-        textPane.setEditorKit(kit);
-
+        textPane.setEditorKit(new HTMLEditorKit());
         textPane.setText(string);
         textPane.setEditable(false);
         textPane.addHyperlinkListener(e -> {
