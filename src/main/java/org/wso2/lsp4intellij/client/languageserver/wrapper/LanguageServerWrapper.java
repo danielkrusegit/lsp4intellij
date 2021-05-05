@@ -27,7 +27,6 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.remoteServer.util.CloudNotifier;
 import com.intellij.util.PlatformIcons;
-import org.apache.commons.codec.language.bm.Languages;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -106,19 +105,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
-import static org.wso2.lsp4intellij.client.languageserver.ServerStatus.INITIALIZED;
-import static org.wso2.lsp4intellij.client.languageserver.ServerStatus.STARTED;
-import static org.wso2.lsp4intellij.client.languageserver.ServerStatus.STARTING;
-import static org.wso2.lsp4intellij.client.languageserver.ServerStatus.STOPPED;
+import static org.wso2.lsp4intellij.client.languageserver.ServerStatus.*;
 import static org.wso2.lsp4intellij.requests.Timeout.getTimeout;
 import static org.wso2.lsp4intellij.requests.Timeouts.INIT;
 import static org.wso2.lsp4intellij.requests.Timeouts.SHUTDOWN;
 import static org.wso2.lsp4intellij.utils.ApplicationUtils.computableReadAction;
 import static org.wso2.lsp4intellij.utils.ApplicationUtils.invokeLater;
-import static org.wso2.lsp4intellij.utils.FileUtils.editorToProjectFolderUri;
-import static org.wso2.lsp4intellij.utils.FileUtils.editorToURIString;
-import static org.wso2.lsp4intellij.utils.FileUtils.reloadEditors;
-import static org.wso2.lsp4intellij.utils.FileUtils.sanitizeURI;
+import static org.wso2.lsp4intellij.utils.FileUtils.*;
 
 /**
  * The implementation of a LanguageServerWrapper (specific to a serverDefinition and a project)
@@ -635,7 +628,7 @@ public class LanguageServerWrapper {
         }
 
         if (connectedEditors.isEmpty()) {
-            stop(true);
+           // stop(true);
         }
     }
 
