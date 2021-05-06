@@ -1017,7 +1017,7 @@ public class EditorEventManager {
         }
     }
 
-    boolean applyEdit(List<TextEdit> edits, String name, boolean setCaret) {
+    public boolean applyEdit(List<TextEdit> edits, String name, boolean setCaret) {
         return applyEdit(Integer.MAX_VALUE, edits, name, false, setCaret);
     }
 
