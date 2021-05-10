@@ -948,13 +948,17 @@ public class EditorEventManager {
             });
         } else {
             builder = builder.withInsertHandler((InsertionContext context, LookupElement lookupElement) -> {
-                if (format == InsertTextFormat.Snippet) {
-                    // Delete completion of Intellij
-                    context.getDocument().deleteString(context.getStartOffset(), context.getTailOffset());
+                // Delete completion of Intellij
+                context.getDocument().deleteString(context.getStartOffset(), context.getTailOffset());
 
+                if (format == InsertTextFormat.Snippet) {
                     context.commitDocument();
                     prepareAndRunSnippet(lookupString);
                 }
+
+                context.commitDocument();
+                applyEdit(Integer.MAX_VALUE, new ArrayList<>(Collections.singletonList(item.getTextEdit())), "Completion : " + label, false, false);
+                context.getEditor().getCaretModel().moveToOffset(context.getTailOffset());
             });
         }
 
