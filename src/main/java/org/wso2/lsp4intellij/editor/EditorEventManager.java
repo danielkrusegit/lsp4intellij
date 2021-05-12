@@ -36,6 +36,7 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.LogicalPosition;
 import com.intellij.openapi.editor.ScrollType;
 import com.intellij.openapi.editor.SelectionModel;
+import com.intellij.openapi.editor.VisualPosition;
 import com.intellij.openapi.editor.colors.EditorColors;
 import com.intellij.openapi.editor.event.DocumentEvent;
 import com.intellij.openapi.editor.event.DocumentListener;
@@ -912,7 +913,9 @@ public class EditorEventManager {
             lookupElementBuilder = lookupElementBuilder.withBoldness(true);
         }
 
-        return lookupElementBuilder.withPresentableText(presentableText).withTypeText(tailText, true).withIcon(icon)
+        return lookupElementBuilder.withPresentableText(presentableText)
+                .withTypeText(tailText, true)
+                .withIcon(icon)
                 .withAutoCompletionPolicy(AutoCompletionPolicy.SETTINGS_DEPENDENT);
     }
 
@@ -946,19 +949,36 @@ public class EditorEventManager {
                 context.commitDocument();
                 executeCommands(Collections.singletonList(command));
             });
-        } else {
-            builder = builder.withInsertHandler((InsertionContext context, LookupElement lookupElement) -> {
-                // Delete completion of Intellij
-                context.getDocument().deleteString(context.getStartOffset(), context.getTailOffset());
-
+        } else if (item.getTextEdit() != null) {
+            builder = builder.withInsertHandler((InsertionContext context, LookupElement lookupElement) -> invokeLater(() -> {
                 if (format == InsertTextFormat.Snippet) {
                     context.commitDocument();
                     prepareAndRunSnippet(lookupString);
                 }
 
                 context.commitDocument();
-                applyEdit(Integer.MAX_VALUE, new ArrayList<>(Collections.singletonList(item.getTextEdit())), "Completion : " + label, false, false);
-                context.getEditor().getCaretModel().moveToOffset(context.getTailOffset());
+
+                // Delete previous text
+                Range range = item.getTextEdit().getRange();
+                LogicalPosition logicalPosition = new LogicalPosition(range.getStart().getLine(), range.getStart().getCharacter());
+                VisualPosition visualPosition = editor.logicalToVisualPosition(logicalPosition);
+                int lineStartOffset = editor.visualPositionToOffset(new VisualPosition(visualPosition.line, 0));
+                int startOffset = lineStartOffset + visualPosition.getColumn();
+                int length = context.getEditor().getCaretModel().getOffset() - startOffset;
+                int character = range.getStart().getCharacter() + length;
+                range.getEnd().setCharacter(character);
+
+                applyEdit(Integer.MAX_VALUE, Collections.singletonList(item.getTextEdit()), "Completion : " + item.getTextEdit().getNewText(), false, false);
+            }));
+        } else {
+            builder = builder.withInsertHandler((InsertionContext context, LookupElement lookupElement) -> {
+                if (format == InsertTextFormat.Snippet) {
+                    // Delete completion of Intellij
+                    context.getDocument().deleteString(context.getStartOffset(), context.getTailOffset());
+
+                    context.commitDocument();
+                    prepareAndRunSnippet(lookupString);
+                }
             });
         }
 
