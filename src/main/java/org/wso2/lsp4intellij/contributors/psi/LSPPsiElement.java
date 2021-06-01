@@ -18,7 +18,6 @@ package org.wso2.lsp4intellij.contributors.psi;
 import com.intellij.lang.ASTNode;
 import com.intellij.lang.Language;
 import com.intellij.navigation.ItemPresentation;
-import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.fileTypes.PlainTextLanguage;
@@ -50,7 +49,6 @@ import com.intellij.util.concurrency.AtomicFieldUpdater;
 import com.intellij.util.keyFMap.KeyFMap;
 import org.jetbrains.annotations.NotNull;
 import org.wso2.lsp4intellij.utils.ApplicationUtils;
-import org.wso2.lsp4intellij.utils.FileUtils;
 
 import javax.annotation.Nullable;
 import javax.swing.*;
@@ -504,7 +502,7 @@ public class LSPPsiElement implements PsiNameIdentifierOwner, NavigatablePsiElem
      * @see com.intellij.psi.search.searches.ReferencesSearch
      */
     public PsiReference[] getReferences() {
-        return new PsiReference[] { (PsiReference) reference };
+        return new PsiReference[]{(PsiReference) reference};
     }
 
     /**
@@ -518,7 +516,7 @@ public class LSPPsiElement implements PsiNameIdentifierOwner, NavigatablePsiElem
      * @return true if the declaration processing should continue or false if it should be stopped.
      */
     public boolean processDeclarations(PsiScopeProcessor processor, ResolveState state, PsiElement lastParent,
-            PsiElement place) {
+                                       PsiElement place) {
         return false;
     }
 
@@ -712,13 +710,10 @@ public class LSPPsiElement implements PsiNameIdentifierOwner, NavigatablePsiElem
     }
 
     public void navigate(boolean requestFocus) {
-        Editor editor = FileUtils.editorFromPsiFile(getContainingFile());
-        if (editor == null) {
-            OpenFileDescriptor descriptor = new OpenFileDescriptor(getProject(), getContainingFile().getVirtualFile(),
-                    getTextOffset());
-            ApplicationUtils.invokeLater(() -> ApplicationUtils
-                    .writeAction(() -> FileEditorManager.getInstance(getProject()).openTextEditor(descriptor, false)));
-        }
+        OpenFileDescriptor descriptor = new OpenFileDescriptor(getProject(), getContainingFile().getVirtualFile(),
+                getTextOffset());
+        ApplicationUtils.invokeLater(() -> ApplicationUtils
+                .writeAction(() -> FileEditorManager.getInstance(getProject()).openTextEditor(descriptor, true)));
     }
 
     /**
