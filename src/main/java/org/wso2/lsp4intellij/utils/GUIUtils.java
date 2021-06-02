@@ -83,7 +83,7 @@ public final class GUIUtils {
     public static Hint createAndShowEditorHint(Editor editor, String string, Point point, short constraint, int flags) {
         JTextPane textPane = new JTextPane();
         textPane.setEditorKit(new HTMLEditorKit());
-        textPane.setText(string);
+        textPane.setText(string.replace("<style>", "<style>p {font-family: Arial; font-size: 10px}"));
         textPane.setEditable(false);
         textPane.addHyperlinkListener(e -> {
             if ((e.getEventType() == HyperlinkEvent.EventType.ACTIVATED)

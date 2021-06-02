@@ -22,7 +22,9 @@ import com.intellij.codeInsight.lookup.AutoCompletionPolicy;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
 import com.intellij.codeInsight.template.Template;
+import com.intellij.codeInsight.template.TemplateEditingAdapter;
 import com.intellij.codeInsight.template.TemplateManager;
+import com.intellij.codeInsight.template.impl.TemplateState;
 import com.intellij.codeInsight.template.impl.TextExpression;
 import com.intellij.lang.Language;
 import com.intellij.lang.LanguageDocumentation;
@@ -104,6 +106,7 @@ import org.eclipse.lsp4j.WorkspaceEdit;
 import org.eclipse.lsp4j.jsonrpc.JsonRpcException;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.eclipse.lsp4j.jsonrpc.messages.Tuple;
+import org.jetbrains.annotations.NotNull;
 import org.wso2.lsp4intellij.actions.LSPReferencesAction;
 import org.wso2.lsp4intellij.client.languageserver.ServerOptions;
 import org.wso2.lsp4intellij.client.languageserver.requestmanager.RequestManager;
@@ -295,6 +298,9 @@ public class EditorEventManager {
             return;
         }
 
+        // pool(() -> requestAndShowDoc(lPos, e.getMouseEvent().getPoint()));
+
+        /*
         long curTime = System.nanoTime();
         if (predTime == (-1L) || ctrlTime == (-1L)) {
             predTime = curTime;
@@ -329,6 +335,7 @@ public class EditorEventManager {
             }
             predTime = curTime;
         }
+        */
     }
 
     private boolean isSupportedLanguageFile(PsiFile file) {
@@ -775,7 +782,7 @@ public class EditorEventManager {
      * @param editorPos The editor position
      * @param point     The point at which to show the hint
      */
-    private void requestAndShowDoc(LogicalPosition editorPos, Point point) {
+    public void requestAndShowDoc(LogicalPosition editorPos, Point point) {
         Position serverPos = computableReadAction(() -> DocumentUtils.logicalToLSPPos(editorPos, editor));
         CompletableFuture<Hover> request = requestManager.hover(new TextDocumentPositionParams(identifier, serverPos));
         if (request == null) {
@@ -989,6 +996,10 @@ public class EditorEventManager {
         List<SnippetElement> elements = new ArrayList<>();
         Matcher matcher = Pattern.compile(SNIPPET_PLACEHOLDER_REGEX).matcher(insertText);
 
+        // Check variable order
+        boolean isDecreasing = false;
+        int prevVariableIndex = -1;
+
         int lastStartIndex = 0;
         while (matcher.find()) {
             // Add previous text
@@ -999,7 +1010,14 @@ public class EditorEventManager {
 
             // Add variable
             String targetVariableRawText = insertText.substring(matcher.start(), matcher.end());
-            elements.add(new SnippetVariable(targetVariableRawText));
+            SnippetVariable snippetVariable = new SnippetVariable(targetVariableRawText);
+            elements.add(snippetVariable);
+
+            // Update variable order state
+            if (snippetVariable.getIndex() != 0) {
+                isDecreasing = prevVariableIndex != -1 && snippetVariable.getIndex() < prevVariableIndex;
+                prevVariableIndex = snippetVariable.getIndex();
+            }
 
             lastStartIndex = matcher.end();
         }
@@ -1015,7 +1033,19 @@ public class EditorEventManager {
         for (SnippetElement snippetElement : elements) {
             snippetElement.addToTemplate(template);
         }
-        TemplateManager.getInstance(getProject()).startTemplate(editor, template);
+
+        // Start template
+        TemplateManager.getInstance(getProject()).startTemplate(editor, template, isDecreasing ? new TemplateEditingAdapter() {
+            @Override
+            public void currentVariableChanged(@NotNull TemplateState templateState, Template template, int oldIndex, int newIndex) {
+                // Start with next tab because index is decreasing (This doesn't work with more than 2 variables..)
+                if (oldIndex == -1) {
+                    templateState.nextTab();
+                }
+            }
+        } : new TemplateEditingAdapter() {
+            // No changes
+        });
 
     }
 
@@ -1566,7 +1596,8 @@ public class EditorEventManager {
 
             // Extract inner format from nested format because IntelliJ doesn't support nested expressions as far as I know..
             if (StringUtils.countMatches(rawText, "$") > 1) {
-                rawText = rawText.split("\\$(\\d|\\{\\d+:?([^{}])*})")[0];
+                String[] array = rawText.split("\\$(\\d|\\{\\d+:?([^{}])*})");
+                rawText = array.length == 0 ? rawText : array[0];
             }
 
             if (rawText.contains("|")) {
@@ -1609,6 +1640,10 @@ public class EditorEventManager {
                     template.addVariable(this.rawText, expression, expression, true, false);
                 }
             }
+        }
+
+        public int getIndex() {
+            return index;
         }
     }
 }
