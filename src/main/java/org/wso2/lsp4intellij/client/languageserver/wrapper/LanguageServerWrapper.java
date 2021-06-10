@@ -352,11 +352,6 @@ public class LanguageServerWrapper {
                             connect(ed);
                         }
 
-                        // Call listeners
-                        for (Consumer<LanguageServerWrapper> callback : IntellijLanguageClient.connectListeners) {
-                            callback.accept(this);
-                        }
-
                         // trigger annotators since the this is the first editor which starts the LS
                         // and annotators are executed before LS is boostrap to provide diagnostics
                         computableReadAction(() -> {
@@ -486,6 +481,12 @@ public class LanguageServerWrapper {
                     // send the initialized message since some langauge servers depends on this message
                     requestManager.initialized(new InitializedParams());
                     setStatus(INITIALIZED);
+
+                    // Call listeners
+                    for (Consumer<LanguageServerWrapper> callback : IntellijLanguageClient.connectListeners) {
+                        callback.accept(this);
+                    }
+
                     return res;
                 });
                 initializeStartTime = System.currentTimeMillis();
