@@ -568,9 +568,9 @@ public class EditorEventManager {
         diagnostics.forEach(diagnostic -> {
             int startOffset = DocumentUtils.LSPPosToOffset(editor, diagnostic.getRange().getStart());
             int endOffset = DocumentUtils.LSPPosToOffset(editor, diagnostic.getRange().getEnd());
-            if (offset >= startOffset && offset <= endOffset) {
-                diagnosticContext.add(diagnostic);
-            }
+            //if (offset >= startOffset && offset <= endOffset) {
+            diagnosticContext.add(diagnostic);
+            //  }
         });
 
         CodeActionContext context = new CodeActionContext(diagnosticContext);
