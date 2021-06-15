@@ -128,6 +128,7 @@ public class LanguageServerWrapper {
     private final HashSet<Editor> toConnect = new HashSet<>();
     private String projectRootPath;
     private final Map<String, EditorEventManager> connectedEditors = new ConcurrentHashMap<>();
+    private final Map<String, WrapperDisconnectStorage> disconnectStorage = new ConcurrentHashMap<>();
     private LSPServerStatusWidget statusWidget;
     private int crashCount = 0;
     private volatile boolean alreadyShownTimeout = false;
@@ -336,6 +337,7 @@ public class LanguageServerWrapper {
                                     mouseMotionListener, caretListener,
                                     requestManager, serverOptions, this);
                         }
+
                         // selectionListener.setManager(manager);
                         documentListener.setManager(manager);
                         mouseListener.setManager(manager);
@@ -350,6 +352,14 @@ public class LanguageServerWrapper {
                         }
                         for (Editor ed : toConnect) {
                             connect(ed);
+                        }
+
+                        WrapperDisconnectStorage prevStorage = disconnectStorage.get(uri);
+                        if (prevStorage == null) {
+                            // Store field in case of disconnect
+                            disconnectStorage.put(uri, new WrapperDisconnectStorage(manager));
+                        } else {
+                            prevStorage.load(manager);
                         }
 
                         // trigger annotators since the this is the first editor which starts the LS
@@ -629,7 +639,7 @@ public class LanguageServerWrapper {
         }
 
         if (connectedEditors.isEmpty()) {
-           // stop(true);
+            // stop(true);
         }
     }
 
