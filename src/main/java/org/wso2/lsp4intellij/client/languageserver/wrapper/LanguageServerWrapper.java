@@ -388,7 +388,6 @@ public class LanguageServerWrapper {
      * Only if the exit flag is true, particular server instance will exit.
      */
     public void stop(boolean exit) {
-        /*
         try {
             if (initializeFuture != null) {
                 initializeFuture.cancel(true);
@@ -421,7 +420,6 @@ public class LanguageServerWrapper {
             languageServer = null;
             setStatus(STOPPED);
         }
-        */
     }
 
     /**
