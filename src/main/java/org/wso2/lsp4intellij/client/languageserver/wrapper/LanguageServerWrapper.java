@@ -218,7 +218,7 @@ public class LanguageServerWrapper {
             try {
                 start();
                 if (initializeFuture != null) {
-                    initializeFuture.get((capabilitiesAlreadyRequested ? 0 : getTimeout(INIT)), TimeUnit.MILLISECONDS);
+                    initializeFuture.get((/*capabilitiesAlreadyRequested ? 0 :*/ getTimeout(INIT)), TimeUnit.MILLISECONDS);
                     notifySuccess(INIT);
                 }
             } catch (TimeoutException e) {
