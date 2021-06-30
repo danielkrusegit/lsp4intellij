@@ -173,6 +173,7 @@ public class EditorEventManager {
     private EditorMouseMotionListener mouseMotionListener;
     private LSPCaretListenerImpl caretListener;
 
+    public List<String> formatOnTypeTriggers;
     public List<String> completionTriggers;
     private List<String> signatureTriggers;
     private DidChangeTextDocumentParams changesParams;
@@ -222,6 +223,15 @@ public class EditorEventManager {
                 serverOptions.signatureHelpOptions.getTriggerCharacters() :
                 new ArrayList<>();
 
+        this.formatOnTypeTriggers = (serverOptions.documentOnTypeFormattingOptions != null
+                && serverOptions.documentOnTypeFormattingOptions.getMoreTriggerCharacter() != null) ?
+                new ArrayList<>(serverOptions.documentOnTypeFormattingOptions.getMoreTriggerCharacter()) :
+                new ArrayList<>();
+        if (serverOptions.documentOnTypeFormattingOptions != null
+                && serverOptions.documentOnTypeFormattingOptions.getFirstTriggerCharacter() != null) {
+            this.formatOnTypeTriggers.add(serverOptions.documentOnTypeFormattingOptions.getFirstTriggerCharacter());
+        }
+
         this.project = editor.getProject();
 
         EditorEventManagerBase.uriToManager.put(FileUtils.editorToURIString(editor), this);
@@ -249,6 +259,10 @@ public class EditorEventManager {
     @SuppressWarnings("unused")
     public DidChangeTextDocumentParams getChangesParams() {
         return changesParams;
+    }
+
+    public List<String> getFormatOnTypeTriggers() {
+        return formatOnTypeTriggers;
     }
 
     /**
